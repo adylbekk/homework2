@@ -262,3 +262,53 @@ def solve(grid):
 
     # If no possible value worked for this empty cell, trigger backtracking
     return False # Indicate failure for this path
+
+def check_solution(solution):
+    """
+    Проверяет валидность решённого Судоку
+    (Все ячейки '1'-'9', без повторов в рядах, колонках, блоках).
+
+    Doctests:
+    >>> grid_p1 = read_sudoku('puzzle1.txt') # Assumes puzzle1.txt exists
+    >>> solved_grid = solve(copy.deepcopy(grid_p1)) if grid_p1 else None
+    >>> check_solution(solved_grid) if solved_grid else False
+    True
+    >>> if solved_grid: solved_grid[0][0] = '.'; result_incomplete = check_solution(solved_grid)
+    >>> result_incomplete if solved_grid else 'skip'
+    False
+    >>> if solved_grid: solved_grid[0][0] = solved_grid[0][1]; result_duplicate = check_solution(solved_grid) # Create duplicate in row 0
+    >>> result_duplicate if solved_grid else 'skip'
+    False
+    """
+    # Basic structural checks first
+    if not solution or not isinstance(solution, list) or len(solution) != 9 \
+       or not all(isinstance(row, list) and len(row) == 9 for row in solution):
+        return False
+
+    expected = set('123456789')
+
+    
+    if not all(set(row) == expected for row in solution):
+        
+        return False
+
+    
+    for c in range(9):
+        
+        if set(solution[r][c] for r in range(9)) != expected:
+            # print(f"Check failed: Column {c} constraint violation.")
+            return False
+
+    
+    for block_r_start in range(0, 9, 3): 
+        for block_c_start in range(0, 9, 3): 
+            
+            block = set(solution[r][c]
+                        for r in range(block_r_start, block_r_start + 3)
+                        for c in range(block_c_start, block_c_start + 3))
+            if block != expected:
+                 # print(f"Check failed: Block starting at ({block_r_start}, {block_c_start}) constraint violation.")
+                 return False
+
+    # If all checks pass
+    return True
