@@ -157,4 +157,63 @@ def get_block(grid, pos):
 
     return block_values
 
-    
+def find_empty_positions(grid):
+    """
+    Найти первую свободную позицию (ячейку с '.') в пазле.
+    Возвращает кортеж (row, col) или None, если пустых нет.
+
+    Doctests:
+    >>> find_empty_positions([['1', '2', '.'], ['4', '5', '6'], ['7', '8', '9']])
+    (0, 2)
+    >>> find_empty_positions([['1', '2', '3'], ['4', '.', '6'], ['7', '8', '9']])
+    (1, 1)
+    >>> find_empty_positions([['1', '2', '3'], ['4', '5', '6'], ['.', '8', '9']])
+    (2, 0)
+    >>> find_empty_positions([['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9']]) is None
+    True
+    """
+    if not grid or not isinstance(grid, list): return None # Handle invalid grid
+    for r, row in enumerate(grid):
+        # Check if row is a list before trying index()
+        if isinstance(row, list):
+            try:
+                # Find the index of the first '.' in the current row
+                c = row.index('.')
+                return (r, c)
+            except ValueError:
+                # '.' not found in this row, continue to the next
+                continue
+    return None # No empty cells found in any row
+
+def find_possible_values(grid, pos):
+    """
+    Вернуть множество всех возможных цифр ('1'-'9') для указанной позиции.
+
+    Doctests:
+    >>> grid_p1 = read_sudoku('puzzle1.txt') # Assumes puzzle1.txt exists
+    >>> values_02 = find_possible_values(grid_p1, (0, 2)) if grid_p1 else set()
+    >>> sorted(list(values_02))
+    ['1', '2', '4']
+    >>> values_47 = find_possible_values(grid_p1, (4, 7)) if grid_p1 else set()
+    >>> sorted(list(values_47))
+    ['2', '5', '9']
+    """
+    if not grid or not pos or len(pos) != 2: return set()
+    r_idx, c_idx = pos
+    # Check if pos is within the bounds of the grid structure
+    if not (0 <= r_idx < len(grid) and isinstance(grid[r_idx], list) and 0 <= c_idx < len(grid[r_idx])):
+        # print(f"Error (find_possible_values): Position {pos} or grid structure invalid.")
+        return set()
+
+    all_digits = set('123456789')
+
+    # Get values from row, column, and block using helper functions
+    # Use set union for combining values
+    used_digits = (
+        set(get_row(grid, pos)) |
+        set(get_col(grid, pos)) |
+        set(get_block(grid, pos))
+    )
+
+    # The possible values are the ones not used (after removing '.')
+    return all_digits - (used_digits - {'.'})
