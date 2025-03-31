@@ -59,4 +59,39 @@ def group(values, n):
          raise ValueError(f"Length of values ({len(values)}) must be divisible by n ({n})")
     # Perform the grouping using list comprehension
     return [values[i:i+n] for i in range(0, len(values), n)]
+
+def display(grid):
+    """Вывод Судоку в читаемом формате."""
+    # Validate grid structure
+    if not grid or not isinstance(grid, list) or len(grid) != 9:
+        print("Cannot display: Invalid or empty grid provided.")
+        return
+    if not all(isinstance(row, list) and len(row) == 9 for row in grid):
+        print("Cannot display: Grid contains invalid rows.")
+        return
+
+    width = 2 
+    # Adjusted line formatting for clarity
+    h_separator = '+'.join(['-' * (width * 3 + 2)] * 3) # e.g., "--------+--------+--------"
+    outer_border_len = len(h_separator) + 4 # Calculate length for top/bottom borders
+
+    print("-" * outer_border_len) 
+    for i, row in enumerate(grid):
+        
+        row_strs = []
+        for j, val in enumerate(row):
+            # Add cell value (left-aligned)
+            row_strs.append(f'{str(val):<{width}}')
+            # Add space within block or separator between blocks
+            if (j + 1) % 3 == 0 and j < 8:
+                row_strs.append(' | ') # Block separator
+            elif j < 8:
+                 row_strs.append(' ') # Space within block
+        print(f"| {''.join(row_strs)} |") 
+
+        
+        if (i + 1) % 3 == 0 and i < 8:
+            print(f"|{h_separator}|")
+    print("-" * outer_border_len) 
+
     
