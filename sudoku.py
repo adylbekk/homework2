@@ -382,3 +382,311 @@ def generate_sudoku(N):
     
 
     return puzzle_grid
+
+# ==============================================================================
+# == Helper Functions for Concurrent/Parallel Execution
+# ==============================================================================
+
+# --- Function for Asyncio ---
+async def run_solve_async(fname):
+    """Async wrapper: Reads, displays original, solves (using executor),
+       displays solved, times, prints result."""
+    # Using a simple separator for less visual clutter
+    separator = f"--- Async Task for {fname} ---"
+    print(f"\n{separator}")
+    start_read_time = time.time()
+    grid = read_sudoku(fname)
+    read_time = time.time() - start_read_time
+    if not grid:
+        print(f"Failed to read {fname} (took {read_time:.4f}s).")
+        print("-" * len(separator))
+        return
+
+    print(f"Read {fname} successfully (took {read_time:.4f}s).")
+    print("Original Puzzle:")
+    display(grid) # Display original puzzle
+
+    print(f"Solving {fname}...")
+    start_solve_time = time.time()
+    loop = asyncio.get_running_loop()
+    solved_grid = None
+    original_grid_copy = copy.deepcopy(grid) # Keep original for display if solve fails
+
+    try:
+        # Run the SYNCHRONOUS solve function in the default thread pool executor
+        # Pass a DEEP COPY of the grid because 'solve' modifies it in-place
+        solved_grid = await loop.run_in_executor(None, solve, copy.deepcopy(grid))
+    except Exception as e:
+        print(f"Error solving {fname} in executor: {e}")
+
+    end_solve_time = time.time()
+    solve_time = end_solve_time - start_solve_time
+
+    result_prefix = f"RESULT for {fname}:"
+
+    if solved_grid and check_solution(solved_grid):
+        print(f"Solved Puzzle ({solve_time:.4f} seconds):")
+        display(solved_grid) # Display solved puzzle
+        print(f"{result_prefix} ✅ SOLVED")
+    elif solved_grid: # Returned a grid but it's invalid
+        print(f"Attempted Solution ({solve_time:.4f} seconds) - INVALID:")
+        display(solved_grid) # Display the invalid result
+        print(f"{result_prefix} ❌ INVALID SOLUTION")
+    else: # solve returned False or exception occurred
+        print(f"Original Puzzle ({solve_time:.4f} seconds) - UNSOLVED:")
+        display(original_grid_copy) # Show the original again
+        print(f"{result_prefix} ❌ FAILED TO SOLVE")
+    print("-" * len(separator))
+
+
+# --- Function for Multiprocessing (ACCEPTS LOCK) ---
+def run_solve_sync_timed(fname, print_lock): # Added print_lock parameter
+    """Synchronous function for MP: Reads, solves, times, prints result using a lock."""
+    # This code runs in a SEPARATE process.
+    process_id = os.getpid()
+    # Reading and solving happen outside the lock to maximize parallelism
+
+    start_read_time = time.time()
+    grid = read_sudoku(fname)
+    read_time = time.time() - start_read_time
+    original_grid_copy = copy.deepcopy(grid) # Keep original separately
+
+    # --- Print initial info and original grid (protected by lock) ---
+    with print_lock:
+        separator = f"--- [MP Process {process_id}] Processing {fname} ---"
+        print(f"\n{separator}") # Start with newline
+        if not grid:
+            print(f"Failed to read {fname} (took {read_time:.4f}s).")
+            print("-" * len(separator))
+            return # Exit this process early if read failed
+
+        print(f"Read {fname} successfully (took {read_time:.4f}s).")
+        print(f"Original Puzzle:")
+        try:
+            display(grid) # Display original puzzle under lock
+        except Exception as e:
+            print(f"Error displaying original: {e}")
+        print(f"Solving {fname}...") # Print solving message inside lock before releasing
+
+    # --- Solving happens OUTSIDE the lock ---
+    start_solve_time = time.time()
+    solved_grid = None
+    try:
+        # Solve a DEEP COPY - crucial for separate process memory
+        # 'solve' is the original synchronous function
+        solved_grid = solve(copy.deepcopy(grid))
+    except Exception as e:
+         # Print error immediately (might interleave, but better than silent failure)
+         # Consider acquiring lock even for error print if strict ordering needed
+         print(f"\n[MP Process {process_id}] Error during solving {fname}: {e}\n")
+
+    end_solve_time = time.time()
+    solve_time = end_solve_time - start_solve_time
+
+    # --- Print results (protected by lock) ---
+    with print_lock:
+        result_prefix = f"[MP Process {process_id}] RESULT for {fname}:"
+        # Use the same separator length basis for consistency
+        separator = f"--- [MP Process {process_id}] Finished {fname} ---"
+
+        if solved_grid and check_solution(solved_grid):
+             print(f"[MP Process {process_id}] Solved Puzzle ({solve_time:.4f} seconds):")
+             try:
+                 display(solved_grid) # Display solved puzzle under lock
+             except Exception as e:
+                 print(f"Error displaying solved: {e}")
+             print(f"{result_prefix} ✅ SOLVED")
+
+        elif solved_grid: # Invalid solution
+             print(f"[MP Process {process_id}] Attempted Solution ({solve_time:.4f} seconds) - INVALID:")
+             try:
+                 display(solved_grid) # Display invalid result under lock
+             except Exception as e:
+                 print(f"Error displaying invalid solution: {e}")
+             print(f"{result_prefix} ❌ INVALID SOLUTION")
+
+        else: # Failed to solve
+             print(f"[MP Process {process_id}] Original Puzzle ({solve_time:.4f} seconds) - UNSOLVED:")
+             try:
+                 # Display the original grid copy we saved earlier
+                 display(original_grid_copy)
+             except Exception as e:
+                 print(f"Error displaying original (unsolved): {e}")
+             print(f"{result_prefix} ❌ FAILED TO SOLVE")
+        print("-" * len(separator)) # Final separator for this file's output block
+
+
+# ==============================================================================
+# == Main Execution Block
+# ==============================================================================
+if __name__ == '__main__':
+
+
+
+    # --- Basic Setup ---
+    puzzle_files = ('puzzle1.txt', 'puzzle2.txt', 'puzzle3.txt')
+    print("=" * 70)
+    print(" Sudoku Solver Lab Execution")
+    print("=" * 70)
+
+    # --- Check for Puzzle Files ---
+    print("--- Checking Puzzle Files ---")
+    files_exist = True
+    for fname in puzzle_files:
+        if not os.path.exists(fname):
+            print(f"WARNING: Puzzle file '{fname}' not found.")
+            files_exist = False
+        else:
+            print(f"- Found '{fname}'.")
+    if not files_exist:
+        print("\nERROR: One or more required puzzle files are missing.")
+        print("Please create them (e.g., using the puzzle file generator script) or upload them.")
+        print("Solver tests will be skipped.")
+    print("-" * 70)
+
+
+    # --- Run Doctests ---
+    print("\n--- Running Doctests ---")
+    # Ensure puzzle1.txt exists for doctests that depend on it
+    doctest_puzzle1_needed = True # Flag if doctests rely on puzzle1.txt
+    if not os.path.exists('puzzle1.txt') and doctest_puzzle1_needed:
+        print("Attempting to create dummy 'puzzle1.txt' for doctests...")
+        try:
+            # Content for dummy puzzle1.txt
+            dummy_content = ("53..7....\n6..195...\n.98....6.\n8...6...3\n"
+                             "4..8.3..1\n7...2...6\n.6....28.\n...419..5\n....8..79\n")
+            with open('puzzle1.txt', 'w') as f: f.write(dummy_content)
+            print("Dummy 'puzzle1.txt' created successfully.")
+            # If files were initially missing, re-check now that one is created
+            if not files_exist:
+                 files_exist = all(os.path.exists(f) for f in puzzle_files)
+        except IOError as e:
+            print(f"Failed to create dummy 'puzzle1.txt': {e}. Some doctests might fail.")
+
+    # Run doctests, capture results
+    # Use verbose=True to see detailed output on failures
+    (failures, tests) = doctest.testmod(verbose=False)
+
+    if tests == 0:
+        print("No doctests found or executed.")
+    elif failures == 0:
+        print(f"All {tests} executed doctests passed! ✅")
+    else:
+        # Doctest automatically prints failure details,
+        print(f"\n*** {failures} out of {tests} DOCTESTS FAILED! Review errors above. *** ❌")
+    print("-" * 70)
+
+
+    # --- Run Solvers (only if puzzle files were found) ---
+    if files_exist:
+
+        # --- Asyncio Execution (Handling Running Loop) ---
+        print("\n" + "=" * 30 + " Solving Puzzles using Asyncio " + "=" * 30)
+        print("(Concurrent execution via thread pool for CPU-bound solve)")
+
+        async def main_async_runner():
+            # Create tasks for each puzzle file
+            # Each task calls run_solve_async which handles reading, solving, displaying
+            tasks = [asyncio.create_task(run_solve_async(fname)) for fname in puzzle_files]
+            await asyncio.gather(*tasks) # Wait for all tasks to complete
+
+        asyncio_start_time = time.time()
+        try:
+            # Attempt standard asyncio.run first
+            asyncio.run(main_async_runner())
+        except RuntimeError as e:
+            # If asyncio.run fails because a loop is already running (common in notebooks)
+            if "cannot be called from a running event loop" in str(e):
+                print("\nWARNING: Detected running asyncio event loop.")
+                print("Attempting to schedule tasks on existing loop (may not block script completion).")
+                # Schedule the runner on the existing loop.
+                # Note: In a standard script, this might exit before tasks finish.
+                
+                try:
+                    loop = asyncio.get_event_loop() # Get the existing loop
+                    # Ensure future allows waiting if possible, but might not block in all contexts
+                    future = asyncio.ensure_future(main_async_runner())
+                    
+                    
+                    print("Asyncio tasks scheduled on existing loop.")
+                except Exception as inner_e:
+                     print(f"Failed to schedule on existing loop: {inner_e}")
+            else:
+                # Re-raise other unexpected RuntimeErrors
+                print(f"\nAn unexpected RuntimeError occurred during asyncio execution: {e}")
+                # raise e # Uncomment to stop execution on other runtime errors
+        except Exception as e:
+            # Catch other potential exceptions during setup/execution
+            print(f"\nAn unexpected error occurred during asyncio setup/execution: {e}")
+
+        asyncio_end_time = time.time()
+        # Note: Timing reflects time to launch/handle tasks, might not be total solve time if loop wasn't fully blocked.
+        print(f"\nAsyncio - Approx. time for task handling: {asyncio_end_time - asyncio_start_time:.4f} seconds")
+        print("-" * 70)
+
+
+        
+        print("\n" + "=" * 25 + " Solving Puzzles using Multiprocessing " + "=" * 25)
+        print("(Parallel execution with locked printing for cleaner output)")
+
+        
+        print_lock = multiprocessing.Lock()
+        processes = []
+        multiprocessing_start_time = time.time()
+
+        try:
+            for fname in puzzle_files:
+                # Pass the lock object as an argument to the target function
+                p = multiprocessing.Process(target=run_solve_sync_timed, args=(fname, print_lock))
+                processes.append(p)
+                p.start() # Start the child process
+
+            # Wait for all child processes to complete their execution
+            for p in processes:
+                p.join() # Blocks the main process until process 'p' finishes
+
+        except Exception as e:
+             print(f"\nAn error occurred during multiprocessing execution: {e}")
+
+        multiprocessing_end_time = time.time()
+        print(f"\nMultiprocessing - Total time for all processes: {multiprocessing_end_time - multiprocessing_start_time:.4f} seconds")
+        print("-" * 70)
+
+    else:
+         # If puzzle files were missing, confirm skipping solver sections
+         print("\nSkipping Asyncio and Multiprocessing solver tests due to missing puzzle files.")
+         print("-" * 70)
+
+
+    # --- Generation Example ---
+    print("\n--- Sudoku Generation Example ---")
+    num_clues = 35 # Example: generate a puzzle with roughly 35 clues
+    print(f"Generating a puzzle with ~{num_clues} clues...")
+    gen_start_time = time.time()
+    generated_puzzle = generate_sudoku(num_clues)
+    gen_create_time = time.time() - gen_start_time
+
+    if generated_puzzle:
+        print(f"Generated Puzzle (creation took {gen_create_time:.4f}s):")
+        display(generated_puzzle)
+
+        print("\nVerifying generated puzzle is solvable...")
+        verify_start_time = time.time()
+        # Solve a copy to verify without modifying the displayed generated puzzle
+        gen_solution = solve(copy.deepcopy(generated_puzzle))
+        verify_solve_time = time.time() - verify_start_time
+
+        if gen_solution and check_solution(gen_solution):
+             print(f"Generated puzzle successfully solved and verified (solve check took {verify_solve_time:.4f}s). ✅")
+             # Optionally display the solution:
+             # print("Generated Solution:")
+             # display(gen_solution)
+        else:
+             print(f"ERROR: Generated puzzle could not be solved or verified (check took {verify_solve_time:.4f}s). ❌")
+    else:
+        print(f"Failed to generate puzzle (took {gen_create_time:.4f}s).")
+    print("-" * 70)
+
+
+    print("\nExecution finished.")
+    print("=" * 70)
