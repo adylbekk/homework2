@@ -217,3 +217,48 @@ def find_possible_values(grid, pos):
 
     # The possible values are the ones not used (after removing '.')
     return all_digits - (used_digits - {'.'})
+
+def solve(grid):
+    """
+    Решение пазла Судоку (рекурсивный бэктрекинг). Модифицирует grid НА МЕСТЕ.
+    Возвращает решенный grid или False, если решения нет.
+
+    Doctests:
+    >>> grid_p1 = read_sudoku('puzzle1.txt') # Assumes puzzle1.txt exists
+    >>> if grid_p1: grid_copy = copy.deepcopy(grid_p1); solution = solve(grid_copy); result = (solution is not False)
+    >>> result if grid_p1 else 'skip' # Check if a solution was found
+    True
+    >>> solution[0] if grid_p1 else 'skip' # Check first row of known solution
+    ['5', '3', '4', '6', '7', '8', '9', '1', '2']
+    >>> # Test unsolvable (modify puzzle1 slightly)
+    >>> if grid_p1: grid_unsolvable = read_sudoku('puzzle1.txt'); grid_unsolvable[0][1] = '6'; result_unsolvable = (solve(grid_unsolvable) is False)
+    >>> result_unsolvable if grid_p1 else 'skip'
+    True
+    """
+    # Find the next empty cell
+    empty_pos = find_empty_positions(grid)
+
+    # Base case: If no empty positions, the puzzle is solved
+    if not empty_pos:
+        # Optional final check (can slow down significantly if used)
+        # return grid if check_solution(grid) else False
+        return grid # Assume validity maintained by recursion
+
+    r, c = empty_pos
+
+    # Try filling the empty cell with possible values
+    # Sorting the values ensures deterministic behavior if multiple solutions exist
+    # (though Sudoku puzzles should ideally have unique solutions)
+    for value in sorted(list(find_possible_values(grid, empty_pos))):
+        grid[r][c] = value # Place the value (attempt)
+
+        # Recursively try to solve the rest of the puzzle
+        if solve(grid): # Recursive call returns solved grid or False
+            # If the recursive call found a solution, propagate it back up
+            return grid
+
+        # Backtrack: If the value didn't lead to a solution, reset the cell
+        grid[r][c] = '.'
+
+    # If no possible value worked for this empty cell, trigger backtracking
+    return False # Indicate failure for this path
