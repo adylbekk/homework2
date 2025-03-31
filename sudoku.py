@@ -312,3 +312,73 @@ def check_solution(solution):
 
     # If all checks pass
     return True
+
+def generate_sudoku(N):
+    """
+    Генерация судоку с N >= 0 заполненными ячейками.
+    Гарантирует РЕШАЕМОСТЬ, но не УНИКАЛЬНОСТЬ решения.
+
+    Doctests:
+    >>> random.seed(42) # for predictable doctest output
+    >>> grid_40 = generate_sudoku(40)
+    >>> isinstance(grid_40, list) # Check return type
+    True
+    >>> sum(1 for row in grid_40 for e in row if e == '.') # 81 - 40 = 41 empty cells
+    41
+    >>> solution_40 = solve(copy.deepcopy(grid_40)) # Solve a copy to check validity
+    >>> check_solution(solution_40)
+    True
+    >>> grid_81 = generate_sudoku(81) # N = 81 should result in a full grid
+    >>> sum(1 for row in grid_81 for e in row if e == '.')
+    0
+    >>> check_solution(grid_81) # A generated full grid should be valid
+    True
+    >>> grid_0 = generate_sudoku(0) # N = 0 should result in an empty grid
+    >>> sum(1 for row in grid_0 for e in row if e == '.')
+    81
+    >>> solution_0 = solve(copy.deepcopy(grid_0)) # Solving an empty grid should work
+    >>> check_solution(solution_0)
+    True
+    """
+    
+    base_grid = [['.' for _ in range(9)] for _ in range(9)]
+
+    
+    
+    solved_grid = solve(copy.deepcopy(base_grid))
+
+    
+    if not solved_grid or not check_solution(solved_grid):
+        print("Error (generate_sudoku): Failed to create a valid base solution.")
+        return None
+
+    
+    N = max(0, min(N, 81))
+
+    
+    cells_to_remove = 81 - N
+    if cells_to_remove == 0:
+        return solved_grid # Return the fully solved grid if N=81
+
+    #Get all possible (row, col) positions and shuffle them randomly.
+    all_positions = [(r, c) for r in range(9) for c in range(9)]
+    random.shuffle(all_positions)
+
+    #Create the puzzle grid by copying the solved grid.
+    puzzle_grid = copy.deepcopy(solved_grid)
+
+    #Remove cells (set to '.') until the desired number is removed.
+    removed_count = 0
+    positions_to_try = list(all_positions) # Use a copy to pop from
+
+    # Basic removal method - does NOT guarantee a unique solution.
+    while removed_count < cells_to_remove and positions_to_try:
+        r, c = positions_to_try.pop()
+        # Only remove if the cell is not already empty (safeguard)
+        if puzzle_grid[r][c] != '.':
+             puzzle_grid[r][c] = '.'
+             removed_count += 1
+
+    
+
+    return puzzle_grid
